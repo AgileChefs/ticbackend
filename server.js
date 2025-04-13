@@ -43,7 +43,7 @@ io.on("connection", (socket) => {
     }
   });
 });
-
-server.listen(8080, () => {
+const PORT= process.env.PORT || 5000
+server.listen(PORT, () => {
   console.log("Multiplayer server running on http://");
 });
