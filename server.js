@@ -2,7 +2,7 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
-
+app.use(cors());
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -45,5 +45,5 @@ io.on("connection", (socket) => {
 });
 
 server.listen(8080, () => {
-  console.log("Multiplayer server running on http://localhost:5000");
+  console.log("Multiplayer server running on http://");
 });
