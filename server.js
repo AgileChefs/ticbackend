@@ -1,5 +1,5 @@
 const express = require("express");
-const http = require("http");
+const http = require("https");
 const { Server } = require("socket.io");
 const cors = require("cors");
 app.use(cors());
@@ -43,7 +43,7 @@ io.on("connection", (socket) => {
     }
   });
 });
-const PORT= process.env.PORT || 5000
+const PORT = process.env.PORT || 3000
 server.listen(PORT, () => {
   console.log("Multiplayer server running on http://");
 });
