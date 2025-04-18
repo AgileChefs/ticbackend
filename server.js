@@ -7,7 +7,7 @@ app.use(cors());
 app.use(express.json());
 
 let waitingPlayer = null;
-const games = {}; // { roomId: { playerX, playerO, board } }
+const games = {}; // { roomId: { playerX, playerO, board, turn } }
 
 function createRoomId(p1, p2) {
   return `${p1}-${p2}`;
@@ -22,6 +22,7 @@ app.post("/join", (req, res) => {
       playerX: waitingPlayer,
       playerO: playerId,
       board: Array(9).fill(null),
+      turn: "X", // X always starts
     };
     const playerSymbol = "O";
     const opponent = waitingPlayer;
@@ -34,12 +35,36 @@ app.post("/join", (req, res) => {
 });
 
 app.post("/move", (req, res) => {
-  const { roomId, board } = req.body;
-  if (games[roomId]) {
-    games[roomId].board = board;
-    return res.sendStatus(200);
+  const { roomId, board, playerId } = req.body;
+  const game = games[roomId];
+
+  if (!game) {
+    return res.status(404).json({ error: "Game not found" });
   }
-  return res.status(404).json({ error: "Game not found" });
+
+  const currentTurnSymbol = game.turn;
+  const playerSymbol = playerId === game.playerX ? "X" : playerId === game.playerO ? "O" : null;
+
+  if (!playerSymbol) {
+    return res.status(403).json({ error: "Player not part of this game" });
+  }
+
+  if (playerSymbol !== currentTurnSymbol) {
+    return res.status(403).json({ error: "It's not your turn" });
+  }
+
+  // Check that only one move was made
+  const currentBoard = game.board;
+  const moveCountDiff = board.filter((cell, i) => cell !== currentBoard[i]).length;
+
+  if (moveCountDiff !== 1) {
+    return res.status(400).json({ error: "Invalid move: must change exactly one cell" });
+  }
+
+  // All validations passed, update board and switch turn
+  game.board = board;
+  game.turn = currentTurnSymbol === "X" ? "O" : "X";
+  return res.sendStatus(200);
 });
 
 app.get("/state/:roomId", (req, res) => {
