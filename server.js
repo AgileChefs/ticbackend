@@ -16,6 +16,7 @@ function createRoomId(p1, p2) {
 app.post("/join", (req, res) => {
   const playerId = req.body.playerId;
 
+  // Ensure that the roomId is being set correctly and both players are added to the game.
   if (waitingPlayer) {
     const roomId = createRoomId(waitingPlayer, playerId);
     games[roomId] = {
