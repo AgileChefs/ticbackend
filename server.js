@@ -39,29 +39,6 @@ app.post("/move", (req, res) => {
   const { roomId, board, playerId } = req.body;
   const game = games[roomId];
 
-  if (!game) {
-    return res.status(404).json({ error: "Game not found" });
-  }
-
-  const currentTurnSymbol = game.turn;
-  const playerSymbol = playerId === game.playerX ? "X" : playerId === game.playerO ? "O" : null;
-
-  if (!playerSymbol) {
-    return res.status(403).json({ error: "Player not part of this game" });
-  }
-
-  if (playerSymbol !== currentTurnSymbol) {
-    return res.status(403).json({ error: "It's not your turn" });
-  }
-
-  // Check that only one move was made
-  const currentBoard = game.board;
-  const moveCountDiff = board.filter((cell, i) => cell !== currentBoard[i]).length;
-
-  if (moveCountDiff !== 1) {
-    return res.status(400).json({ error: "Invalid move: must change exactly one cell" });
-  }
-
   // All validations passed, update board and switch turn
   game.board = board;
   game.turn = currentTurnSymbol === "X" ? "O" : "X";
