@@ -1,58 +1,64 @@
 const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
 const cors = require("cors");
-const app = express();
-const PORT = 8080;
 
+const app = express();
 app.use(cors());
-app.use(express.json());
+
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*", // Allow from all origins during dev
+  },
+});
 
 let waitingPlayer = null;
-const games = {}; // { roomId: { playerX, playerO, board, turn } }
 
-function createRoomId(p1, p2) {
-  return `${p1}-${p2}`;
-}
+io.on("connection", (socket) => {
+  console.log("Player connected:", socket.id);
 
-app.post("/join", (req, res) => {
-  const playerId = req.body.playerId;
-
-  // Ensure that the roomId is being set correctly and both players are added to the game.
+  // Check if there's a waiting player
   if (waitingPlayer) {
-    const roomId = createRoomId(waitingPlayer, playerId);
-    games[roomId] = {
-      playerX: waitingPlayer,
-      playerO: playerId,
-      board: Array(9).fill(null),
-      turn: "X", // X always starts
-    };
-    const playerSymbol = "O";
-    const opponent = waitingPlayer;
-    waitingPlayer = null;
-    return res.json({ roomId, symbol: playerSymbol, opponent });
+    const room = `${waitingPlayer.id}#${socket.id}`; // Create a unique room using both player IDs
+    socket.join(room);  // Join the new player to the room
+    waitingPlayer.join(room);  // Join the waiting player to the room
+
+    // Start the game and inform both players of their roles
+    io.to(room).emit("startGame", {
+      room,
+      playerX: waitingPlayer.id,  // First player is X
+      playerO: socket.id,  // Second player is O
+    });
+
+    waitingPlayer = null;  // Reset waiting player to allow new players to connect
   } else {
-    waitingPlayer = playerId;
-    return res.json({ roomId: null, symbol: "X" });
+    // If no one is waiting, this player will wait for another player to connect
+    waitingPlayer = socket;
+    console.log("Waiting for another player...");
   }
+
+  // Handle the move made by a player and update the board
+  socket.on("makeMove", ({ room, squares }) => {
+    io.to(room).emit("updateBoard", squares);  // Broadcast the new board state to both players
+  });
+
+  // Handle disconnection of players
+  socket.on("disconnect", () => {
+    console.log("Player disconnected:", socket.id);
+    if (waitingPlayer && waitingPlayer.id === socket.id) {
+      waitingPlayer = null;  // If the waiting player disconnects, reset waitingPlayer
+    } else {
+      // Cleanup if a player in the active game disconnects
+      const room = Object.keys(socket.rooms)[0];  // Get the room the player is part of
+      if (room) {
+        io.to(room).emit("gameOver", { message: "The other player disconnected." });
+        io.in(room).disconnectSockets();  // Disconnect both players from the room
+      }
+    }
+  });
 });
 
-app.post("/move", (req, res) => {
-  const { roomId, board, playerId } = req.body;
-  const game = games[roomId];
-
-  // All validations passed, update board and switch turn
-  game.board = board;
-  game.turn = currentTurnSymbol === "X" ? "O" : "X";
-  return res.sendStatus(200);
-});
-
-app.get("/state/:roomId", (req, res) => {
-  const roomId = req.params.roomId;
-  if (games[roomId]) {
-    return res.json(games[roomId].board);
-  }
-  return res.status(404).json({ error: "Game not found" });
-});
-
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+server.listen(5000, () => {
+  console.log("Multiplayer server running on http://localhost:5000");
 });
