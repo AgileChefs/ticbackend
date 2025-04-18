@@ -1,50 +1,55 @@
 const express = require("express");
-
-const http = require("http");
-const { Server } = require("socket.io");
 const cors = require("cors");
-app.use(cors());
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: "*", // Allow from all origins during dev
-  },
-});
+const PORT = 8080;
+
+app.use(cors());
+app.use(express.json());
 
 let waitingPlayer = null;
+const games = {}; // { roomId: { playerX, playerO, board } }
 
-io.on("connection", (socket) => {
-  console.log("Player connected:", socket.id);
+function createRoomId(p1, p2) {
+  return `${p1}-${p2}`;
+}
+
+app.post("/join", (req, res) => {
+  const playerId = req.body.playerId;
 
   if (waitingPlayer) {
-    const room = `${waitingPlayer.id}#${socket.id}`;
-    socket.join(room);
-    waitingPlayer.join(room);
-
-    io.to(room).emit("startGame", {
-      room,
-      playerX: waitingPlayer.id,
-      playerO: socket.id,
-    });
-
+    const roomId = createRoomId(waitingPlayer, playerId);
+    games[roomId] = {
+      playerX: waitingPlayer,
+      playerO: playerId,
+      board: Array(9).fill(null),
+    };
+    const playerSymbol = "O";
+    const opponent = waitingPlayer;
     waitingPlayer = null;
+    return res.json({ roomId, symbol: playerSymbol, opponent });
   } else {
-    waitingPlayer = socket;
+    waitingPlayer = playerId;
+    return res.json({ roomId: null, symbol: "X" });
   }
-
-  socket.on("makeMove", ({ room, squares }) => {
-    io.to(room).emit("updateBoard", squares);
-  });
-
-  socket.on("disconnect", () => {
-    console.log("Player disconnected:", socket.id);
-    if (waitingPlayer && waitingPlayer.id === socket.id) {
-      waitingPlayer = null;
-    }
-  });
 });
-const PORT = process.env.PORT || 3000
-server.listen(PORT, () => {
-  console.log("Multiplayer server running on http://");
+
+app.post("/move", (req, res) => {
+  const { roomId, board } = req.body;
+  if (games[roomId]) {
+    games[roomId].board = board;
+    return res.sendStatus(200);
+  }
+  return res.status(404).json({ error: "Game not found" });
+});
+
+app.get("/state/:roomId", (req, res) => {
+  const roomId = req.params.roomId;
+  if (games[roomId]) {
+    return res.json(games[roomId].board);
+  }
+  return res.status(404).json({ error: "Game not found" });
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
 });
