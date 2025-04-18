@@ -1,7 +1,7 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: Build and deploy Node.js app to Azure Web App - tictactoebackend
+name: Build and deploy Node.js app to Azure Web App - ticbackend
 
 on:
   push:
@@ -60,15 +60,15 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_9FFC038D53694D608DDE5E648234B383 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_9E78842BBC344E00BB16F517812157DA }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_B284AE3E50D841B283CD56F85B04A31A }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_5E691BCA0EA44BFC80C6D318978DC5C3 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_FAD81CA4FC7A48E9BFEE4735452E047B }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_E76C5533161F478DB7776C68C91757C0 }}
 
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'tictactoebackend'
+          app-name: 'ticbackend'
           slot-name: 'Production'
           package: .
           
