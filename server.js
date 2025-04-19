@@ -1,64 +1,87 @@
-const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
-const cors = require("cors");
+const WebSocket = require("ws");
+const server = new WebSocket.Server({ port: 8080 });
 
-const app = express();
-app.use(cors());
+let players = [];
+let board = Array(9).fill(null);
+let turn = "X";
+let winner = null;
+let winningLine = [];
 
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: "*", // Allow from all origins during dev
-  },
-});
+const winningCombos = [
+  [0, 1, 2],
+  [3, 4, 5],
+  [6, 7, 8],
+  [0, 3, 6],
+  [1, 4, 7],
+  [2, 5, 8],
+  [0, 4, 8],
+  [2, 4, 6],
+];
 
-let waitingPlayer = null;
+function checkWinner() {
+  for (const [a, b, c] of winningCombos) {
+    if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+      return { winner: board[a], line: [a, b, c] };
+    }
+  }
+  if (!board.includes(null)) return { winner: "Draw", line: [] };
+  return { winner: null, line: [] };
+}
 
-io.on("connection", (socket) => {
-  console.log("Player connected:", socket.id);
+function broadcastUpdate() {
+  const data = JSON.stringify({
+    type: "update",
+    board,
+    turn,
+    winner,
+    winningLine,
+  });
+  players.forEach((p) => p.send(data));
+}
 
-  // Check if there's a waiting player
-  if (waitingPlayer) {
-    const room = `${waitingPlayer.id}#${socket.id}`; // Create a unique room using both player IDs
-    socket.join(room);  // Join the new player to the room
-    waitingPlayer.join(room);  // Join the waiting player to the room
-
-    // Start the game and inform both players of their roles
-    io.to(room).emit("startGame", {
-      room,
-      playerX: waitingPlayer.id,  // First player is X
-      playerO: socket.id,  // Second player is O
-    });
-
-    waitingPlayer = null;  // Reset waiting player to allow new players to connect
-  } else {
-    // If no one is waiting, this player will wait for another player to connect
-    waitingPlayer = socket;
-    console.log("Waiting for another player...");
+server.on("connection", (ws) => {
+  if (players.length >= 2) {
+    ws.close(); // Only allow 2 players
+    return;
   }
 
-  // Handle the move made by a player and update the board
-  socket.on("makeMove", ({ room, squares }) => {
-    io.to(room).emit("updateBoard", squares);  // Broadcast the new board state to both players
-  });
+  const symbol = players.length === 0 ? "X" : "O";
+  players.push(ws);
+  ws.send(JSON.stringify({ type: "init", symbol }));
 
-  // Handle disconnection of players
-  socket.on("disconnect", () => {
-    console.log("Player disconnected:", socket.id);
-    if (waitingPlayer && waitingPlayer.id === socket.id) {
-      waitingPlayer = null;  // If the waiting player disconnects, reset waitingPlayer
-    } else {
-      // Cleanup if a player in the active game disconnects
-      const room = Object.keys(socket.rooms)[0];  // Get the room the player is part of
-      if (room) {
-        io.to(room).emit("gameOver", { message: "The other player disconnected." });
-        io.in(room).disconnectSockets();  // Disconnect both players from the room
+  ws.on("message", (message) => {
+    const data = JSON.parse(message);
+
+    if (data.type === "move" && !winner) {
+      const index = data.index;
+      if (board[index] === null) {
+        const playerIndex = players.indexOf(ws);
+        const playerSymbol = playerIndex === 0 ? "X" : "O";
+        if (playerSymbol === turn) {
+          board[index] = turn;
+          const result = checkWinner();
+          winner = result.winner;
+          winningLine = result.line;
+          turn = turn === "X" ? "O" : "X";
+          broadcastUpdate();
+        }
       }
     }
-  });
-});
 
-server.listen(5000, () => {
-  console.log("Multiplayer server running on http://localhost:5000");
+    if (data.type === "reset" && winner !== null) {
+      board = Array(9).fill(null);
+      turn = "X";
+      winner = null;
+      winningLine = [];
+      players.forEach((p) => p.send(JSON.stringify({ type: "reset" })));
+    }
+  });
+
+  ws.on("close", () => {
+    players = players.filter((p) => p !== ws);
+    board = Array(9).fill(null);
+    turn = "X";
+    winner = null;
+    winningLine = [];
+  });
 });
