@@ -6,6 +6,7 @@ let board = Array(9).fill(null);
 let turn = "X";
 let winner = null;
 let winningLine = [];
+let chatMessages = []; // Store chat messages
 
 const winningCombos = [
   [0, 1, 2],
@@ -39,8 +40,17 @@ function broadcastUpdate() {
   players.forEach((p) => p.send(data));
 }
 
+function broadcastChat(message) {
+  const data = JSON.stringify({
+    type: "chat",
+    message
+  });
+  players.forEach((p) => p.send(data));
+}
+
 server.on("connection", (ws) => {
   if (players.length >= 2) {
+    ws.send(JSON.stringify({ type: "full", message: "Game is full" }));
     ws.close(); // Only allow 2 players
     return;
   }
@@ -48,6 +58,11 @@ server.on("connection", (ws) => {
   const symbol = players.length === 0 ? "X" : "O";
   players.push(ws);
   ws.send(JSON.stringify({ type: "init", symbol }));
+  
+  // Send chat history to new player
+  chatMessages.forEach(msg => {
+    ws.send(JSON.stringify({ type: "chat", message: msg }));
+  });
 
   ws.on("message", (message) => {
     const data = JSON.parse(message);
@@ -74,6 +89,26 @@ server.on("connection", (ws) => {
       winner = null;
       winningLine = [];
       players.forEach((p) => p.send(JSON.stringify({ type: "reset" })));
+    }
+    
+    // Handle chat messages
+    if (data.type === "chat") {
+      const playerIndex = players.indexOf(ws);
+      const playerSymbol = playerIndex === 0 ? "X" : "O";
+      const chatMessage = {
+        text: data.text,
+        sender: playerSymbol,
+        timestamp: new Date().toISOString()
+      };
+      
+      // Store message in history (limit to last 50 messages)
+      chatMessages.push(chatMessage);
+      if (chatMessages.length > 50) {
+        chatMessages.shift();
+      }
+      
+      // Broadcast to all players
+      broadcastChat(chatMessage);
     }
   });
 
